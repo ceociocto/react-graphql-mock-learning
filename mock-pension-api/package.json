@@ -1,0 +1,25 @@
+{
+  "name": "mock-pension-api",
+  "version": "1.0.0",
+  "description": "Mock GraphQL API for UK Pension System",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@graphql-tools/schema": "^10.0.0",
+    "@types/node": "^22.0.0",
+    "graphql": "^16.8.0",
+    "graphql-yoga": "^5.0.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "graphql-subscriptions": "^3.0.0"
+  }
+}

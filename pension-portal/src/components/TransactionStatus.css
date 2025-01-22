@@ -1,0 +1,56 @@
+.transaction-status {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.transaction-status h4 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.status-pending {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.status-approved {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.status-rejected {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.status-completed {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.transaction-details {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.transaction-details p {
+  margin: 0.5rem 0;
+}
+
+.error-text {
+  color: #c62828;
+  font-size: 0.875rem;
+  margin: 0;
+} 

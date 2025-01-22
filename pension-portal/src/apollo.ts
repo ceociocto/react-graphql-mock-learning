@@ -1,4 +1,4 @@
-import { ApolloClient, InMemoryCache, split, HttpLink } from '@apollo/client';
+import { ApolloClient, InMemoryCache, split, HttpLink, DocumentNode } from '@apollo/client';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { createClient } from 'graphql-ws';
 import { getMainDefinition } from '@apollo/client/utilities';
@@ -16,7 +16,7 @@ const wsLink = new GraphQLWsLink(createClient({
 
 // 根据操作类型分割请求
 const splitLink = split(
-  ({ query }) => {
+  ({ query }: { query: DocumentNode }) => {
     const definition = getMainDefinition(query);
     return (
       definition.kind === 'OperationDefinition' &&

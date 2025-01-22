@@ -10,7 +10,7 @@ interface AccountCardProps {
 const AccountCard: React.FC<AccountCardProps> = ({ account }) => {
   const [showWithdrawalForm, setShowWithdrawalForm] = useState(false);
 
-  const getStatusColor = (status: PensionStatus) => {
+  const getStatusColor = (status: PensionStatus): string => {
     switch (status) {
       case PensionStatus.ACTIVE:
         return 'status-active';
@@ -23,7 +23,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ account }) => {
     }
   };
 
-  const getStatusText = (status: PensionStatus) => {
+  const getStatusText = (status: PensionStatus): string => {
     switch (status) {
       case PensionStatus.ACTIVE:
         return '正常';
@@ -32,7 +32,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ account }) => {
       case PensionStatus.WITHDRAWN:
         return '已提取完毕';
       default:
-        return status;
+        return '未知状态';
     }
   };
 

@@ -1,5 +1,35 @@
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { PubSub } from 'graphql-subscriptions';
+import { GraphQLResolveInfo } from 'graphql';
+
+// 类型定义
+interface PensionAccount {
+  id: string;
+  accountNumber: string;
+  balance: number;
+  ownerName: string;
+  status: 'ACTIVE' | 'FROZEN' | 'WITHDRAWN';
+  eligibleForWithdrawal: boolean;
+  withdrawalHistory: Transaction[];
+}
+
+interface Transaction {
+  id: string;
+  amount: number;
+  date: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
+}
+
+interface PensionRules {
+  minimumAge: number;
+  maximumWithdrawalPercentage: number;
+  taxFreeAmount: number;
+}
+
+interface Database {
+  accounts: PensionAccount[];
+  rules: PensionRules;
+}
 
 const pubsub = new PubSub();
 
@@ -8,7 +38,7 @@ const WITHDRAWAL_STATUS_CHANGED = 'WITHDRAWAL_STATUS_CHANGED';
 const ACCOUNT_BALANCE_CHANGED = 'ACCOUNT_BALANCE_CHANGED';
 
 // 模拟数据存储
-const db = {
+const db: Database = {
   accounts: [
     {
       id: '1',
@@ -37,7 +67,6 @@ const db = {
     }
   ],
   
-  // 养老金提取规则
   rules: {
     minimumAge: 55,
     maximumWithdrawalPercentage: 25,
@@ -125,24 +154,36 @@ const typeDefs = `
   }
 `;
 
+// 解析器类型
+type Context = {
+  // 如果需要，可以添加上下文类型
+};
+
+type Resolver<TResult, TParent = {}, TArgs = {}> = (
+  parent: TParent,
+  args: TArgs,
+  context: Context,
+  info: GraphQLResolveInfo
+) => Promise<TResult> | TResult;
+
 // 解析器
 const resolvers = {
   Query: {
-    pensionAccount: (_: any, { id }: { id: string }) => 
-      db.accounts.find(account => account.id === id),
+    pensionAccount: ((_parent, { id }: { id: string }) => 
+      db.accounts.find(account => account.id === id)) as Resolver<PensionAccount | undefined, {}, { id: string }>,
     
-    allPensionAccounts: () => db.accounts,
+    allPensionAccounts: (() => db.accounts) as Resolver<PensionAccount[]>,
     
-    accountTransactions: (_: any, { accountId }: { accountId: string }) => {
+    accountTransactions: ((_parent, { accountId }: { accountId: string }) => {
       const account = db.accounts.find(acc => acc.id === accountId);
       return account ? account.withdrawalHistory : [];
-    },
+    }) as Resolver<Transaction[], {}, { accountId: string }>,
     
-    pensionRules: () => db.rules
+    pensionRules: (() => db.rules) as Resolver<PensionRules>
   },
 
   Mutation: {
-    requestWithdrawal: async (_: any, { accountId, amount }: { accountId: string, amount: number }) => {
+    requestWithdrawal: (async (_parent, { accountId, amount }: { accountId: string, amount: number }) => {
       const account = db.accounts.find(acc => acc.id === accountId);
       
       if (!account) {
@@ -169,7 +210,6 @@ const resolvers = {
         };
       }
 
-      // 检查提取金额是否超过最大允许比例
       const maxAmount = account.balance * (db.rules.maximumWithdrawalPercentage / 100);
       if (amount > maxAmount) {
         return {
@@ -179,7 +219,7 @@ const resolvers = {
         };
       }
 
-      const transaction = {
+      const transaction: Transaction = {
         id: `TXN${Math.random().toString(36).substr(2, 6)}`,
         amount,
         date: new Date().toISOString(),
@@ -189,13 +229,11 @@ const resolvers = {
       account.withdrawalHistory.push(transaction);
       account.balance -= amount;
 
-      // 发布交易状态变更事件
       await pubsub.publish(WITHDRAWAL_STATUS_CHANGED, {
         withdrawalStatusChanged: transaction,
         accountId
       });
 
-      // 发布账户余额变更事件
       await pubsub.publish(ACCOUNT_BALANCE_CHANGED, {
         accountBalanceChanged: account,
         accountId
@@ -206,9 +244,9 @@ const resolvers = {
         message: '提取申请已提交',
         transaction
       };
-    },
+    }) as Resolver<{ success: boolean; message: string; transaction: Transaction | null }, {}, { accountId: string; amount: number }>,
 
-    updateAccountStatus: (_: any, { accountId, status }: { accountId: string, status: string }) => {
+    updateAccountStatus: ((_parent, { accountId, status }: { accountId: string, status: PensionAccount['status'] }) => {
       const account = db.accounts.find(acc => acc.id === accountId);
       if (!account) {
         throw new Error('账户未找到');
@@ -216,26 +254,26 @@ const resolvers = {
 
       account.status = status;
       return account;
-    }
+    }) as Resolver<PensionAccount, {}, { accountId: string; status: PensionAccount['status'] }>
   },
 
   Subscription: {
     withdrawalStatusChanged: {
-      subscribe: (_: any, { accountId }: { accountId: string }) => {
+      subscribe: ((_parent, { accountId }: { accountId: string }) => {
         return pubsub.asyncIterator([WITHDRAWAL_STATUS_CHANGED]);
-      },
-      resolve: (payload: any) => {
+      }) as Resolver<AsyncIterator<unknown>, {}, { accountId: string }>,
+      resolve: ((payload: { withdrawalStatusChanged: Transaction }) => {
         return payload.withdrawalStatusChanged;
-      }
+      }) as Resolver<Transaction, { withdrawalStatusChanged: Transaction }>
     },
 
     accountBalanceChanged: {
-      subscribe: (_: any, { accountId }: { accountId: string }) => {
+      subscribe: ((_parent, { accountId }: { accountId: string }) => {
         return pubsub.asyncIterator([ACCOUNT_BALANCE_CHANGED]);
-      },
-      resolve: (payload: any) => {
+      }) as Resolver<AsyncIterator<unknown>, {}, { accountId: string }>,
+      resolve: ((payload: { accountBalanceChanged: PensionAccount }) => {
         return payload.accountBalanceChanged;
-      }
+      }) as Resolver<PensionAccount, { accountBalanceChanged: PensionAccount }>
     }
   }
 };

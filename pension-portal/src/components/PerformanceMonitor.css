@@ -1,0 +1,123 @@
+.performance-monitor {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 300px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.performance-monitor.expanded {
+  height: auto;
+}
+
+.monitor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+
+.monitor-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.toggle-icon {
+  color: #666;
+  font-size: 12px;
+}
+
+.monitor-content {
+  padding: 16px;
+  border-top: 1px solid #eee;
+}
+
+.metrics-summary {
+  margin-bottom: 20px;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.metric-item label {
+  color: #666;
+}
+
+.metric-item span {
+  font-weight: 500;
+}
+
+.recent-operations h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.operations-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.operation-item {
+  padding: 8px;
+  border-radius: 4px;
+  background: #f8f9fa;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.operation-name {
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.operation-details {
+  display: flex;
+  gap: 8px;
+  color: #666;
+}
+
+/* 状态颜色 */
+.warning {
+  color: #f0ad4e;
+}
+
+.error {
+  color: #dc3545;
+}
+
+.success {
+  color: #28a745;
+}
+
+/* 滚动条样式 */
+.operations-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.operations-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.operations-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.operations-list::-webkit-scrollbar-thumb:hover {
+  background: #999;
+} 

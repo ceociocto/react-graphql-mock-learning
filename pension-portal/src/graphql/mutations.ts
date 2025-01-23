@@ -23,4 +23,28 @@ export const UPDATE_ACCOUNT_STATUS = gql`
       eligibleForWithdrawal
     }
   }
+`;
+
+export const ADD_BENEFICIARY = gql`
+  mutation AddBeneficiary(
+    $accountId: ID!
+    $name: String!
+    $relationship: String!
+    $percentage: Float!
+    $contactNumber: String!
+  ) {
+    addBeneficiary(
+      accountId: $accountId
+      name: $name
+      relationship: $relationship
+      percentage: $percentage
+      contactNumber: $contactNumber
+    ) {
+      id
+      name
+      relationship
+      percentage
+      contactNumber
+    }
+  }
 `; 

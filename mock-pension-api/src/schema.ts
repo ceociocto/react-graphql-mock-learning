@@ -1,8 +1,17 @@
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { PubSub } from 'graphql-subscriptions';
 import { GraphQLResolveInfo } from 'graphql';
+import { createBeneficiaryLoader, createTransactionLoader, createAccountLoader } from './loaders';
 
 // 类型定义
+interface BeneficiaryInfo {
+  id: string;
+  name: string;
+  relationship: string;
+  percentage: number;
+  contactNumber: string;
+}
+
 interface PensionAccount {
   id: string;
   accountNumber: string;
@@ -11,6 +20,7 @@ interface PensionAccount {
   status: 'ACTIVE' | 'FROZEN' | 'WITHDRAWN';
   eligibleForWithdrawal: boolean;
   withdrawalHistory: Transaction[];
+  beneficiaries: BeneficiaryInfo[];  // 新增受益人字段
 }
 
 interface Transaction {
@@ -54,6 +64,22 @@ const db: Database = {
           date: '2024-01-15T10:00:00Z',
           status: 'COMPLETED'
         }
+      ],
+      beneficiaries: [
+        {
+          id: 'BEN001',
+          name: '张小明',
+          relationship: '子女',
+          percentage: 60,
+          contactNumber: '13800138001'
+        },
+        {
+          id: 'BEN002',
+          name: '李娟',
+          relationship: '配偶',
+          percentage: 40,
+          contactNumber: '13800138002'
+        }
       ]
     },
     {
@@ -63,7 +89,16 @@ const db: Database = {
       ownerName: '李四',
       status: 'ACTIVE',
       eligibleForWithdrawal: false,
-      withdrawalHistory: []
+      withdrawalHistory: [],
+      beneficiaries: [
+        {
+          id: 'BEN003',
+          name: '李明',
+          relationship: '子女',
+          percentage: 100,
+          contactNumber: '13800138003'
+        }
+      ]
     }
   ],
   
@@ -76,6 +111,14 @@ const db: Database = {
 
 // GraphQL Schema 定义
 const typeDefs = `
+  type BeneficiaryInfo {
+    id: ID!
+    name: String!
+    relationship: String!
+    percentage: Float!
+    contactNumber: String!
+  }
+
   type PensionAccount {
     id: ID!
     accountNumber: String!
@@ -84,6 +127,7 @@ const typeDefs = `
     status: PensionStatus!
     eligibleForWithdrawal: Boolean!
     withdrawalHistory: [Transaction!]!
+    beneficiaries: [BeneficiaryInfo!]!
   }
 
   enum PensionStatus {
@@ -118,6 +162,35 @@ const typeDefs = `
     taxFreeAmount: Float!
   }
 
+  type PageInfo {
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+    startCursor: String
+    endCursor: String
+  }
+
+  type PensionAccountEdge {
+    cursor: String!
+    node: PensionAccount!
+  }
+
+  type PensionAccountConnection {
+    edges: [PensionAccountEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+  }
+
+  type TransactionEdge {
+    cursor: String!
+    node: Transaction!
+  }
+
+  type TransactionConnection {
+    edges: [TransactionEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
+  }
+
   type Query {
     # 查询单个账户
     pensionAccount(id: ID!): PensionAccount
@@ -130,6 +203,29 @@ const typeDefs = `
     
     # 查询养老金规则
     pensionRules: PensionRules!
+    
+    # 查询账户受益人信息
+    accountBeneficiaries(accountId: ID!): [BeneficiaryInfo!]!
+    
+    # 批量查询多个账户
+    pensionAccounts(ids: [ID!]!): [PensionAccount]!
+
+    # 分页查询账户列表
+    paginatedAccounts(
+      first: Int
+      after: String
+      last: Int
+      before: String
+    ): PensionAccountConnection!
+
+    # 分页查询交易历史
+    paginatedTransactions(
+      accountId: ID!
+      first: Int
+      after: String
+      last: Int
+      before: String
+    ): TransactionConnection!
   }
 
   type Mutation {
@@ -144,6 +240,15 @@ const typeDefs = `
       accountId: ID!, 
       status: PensionStatus!
     ): PensionAccount!
+    
+    # 添加受益人
+    addBeneficiary(
+      accountId: ID!
+      name: String!
+      relationship: String!
+      percentage: Float!
+      contactNumber: String!
+    ): BeneficiaryInfo!
   }
 
   type Subscription {
@@ -155,9 +260,13 @@ const typeDefs = `
 `;
 
 // 解析器类型
-type Context = {
-  // 如果需要，可以添加上下文类型
-};
+interface Context {
+  loaders: {
+    beneficiaryLoader: ReturnType<typeof createBeneficiaryLoader>;
+    transactionLoader: ReturnType<typeof createTransactionLoader>;
+    accountLoader: ReturnType<typeof createAccountLoader>;
+  };
+}
 
 type Resolver<TResult, TParent = {}, TArgs = {}> = (
   parent: TParent,
@@ -169,17 +278,119 @@ type Resolver<TResult, TParent = {}, TArgs = {}> = (
 // 解析器
 const resolvers = {
   Query: {
-    pensionAccount: ((_parent, { id }: { id: string }) => 
-      db.accounts.find(account => account.id === id)) as Resolver<PensionAccount | undefined, {}, { id: string }>,
+    pensionAccount: (async (_parent, { id }, { loaders }) => {
+      return await loaders.accountLoader.load(id);
+    }) as Resolver<PensionAccount | undefined, {}, { id: string }>,
     
     allPensionAccounts: (() => db.accounts) as Resolver<PensionAccount[]>,
     
-    accountTransactions: ((_parent, { accountId }: { accountId: string }) => {
-      const account = db.accounts.find(acc => acc.id === accountId);
-      return account ? account.withdrawalHistory : [];
+    accountTransactions: (async (_parent, { accountId }, { loaders }) => {
+      return await loaders.transactionLoader.load(accountId);
     }) as Resolver<Transaction[], {}, { accountId: string }>,
     
-    pensionRules: (() => db.rules) as Resolver<PensionRules>
+    pensionRules: (() => db.rules) as Resolver<PensionRules>,
+    
+    accountBeneficiaries: (async (_parent, { accountId }, { loaders }) => {
+      return await loaders.beneficiaryLoader.load(accountId);
+    }) as Resolver<BeneficiaryInfo[], {}, { accountId: string }>,
+    
+    pensionAccounts: (async (_parent, { ids }, { loaders }) => {
+      return await loaders.accountLoader.loadMany(ids);
+    }) as Resolver<PensionAccount[], {}, { ids: string[] }>,
+
+    paginatedAccounts: (async (_parent, args) => {
+      const { first = 10, after, last, before } = args;
+      let accounts = [...db.accounts];
+      
+      // 实现基于游标的分页
+      let hasNextPage = false;
+      let hasPreviousPage = false;
+      
+      if (after) {
+        const index = accounts.findIndex(acc => Buffer.from(acc.id).toString('base64') === after);
+        accounts = accounts.slice(index + 1);
+        hasPreviousPage = true;
+      }
+      
+      if (before) {
+        const index = accounts.findIndex(acc => Buffer.from(acc.id).toString('base64') === before);
+        accounts = accounts.slice(0, index);
+      }
+      
+      if (first) {
+        hasNextPage = accounts.length > first;
+        accounts = accounts.slice(0, first);
+      }
+      
+      if (last) {
+        hasPreviousPage = true;
+        accounts = accounts.slice(-last);
+      }
+
+      const edges = accounts.map(account => ({
+        cursor: Buffer.from(account.id).toString('base64'),
+        node: account
+      }));
+
+      return {
+        edges,
+        pageInfo: {
+          hasNextPage,
+          hasPreviousPage,
+          startCursor: edges[0]?.cursor,
+          endCursor: edges[edges.length - 1]?.cursor
+        },
+        totalCount: db.accounts.length
+      };
+    }) as Resolver<any, {}, { first?: number; after?: string; last?: number; before?: string }>,
+
+    paginatedTransactions: (async (_parent, args) => {
+      const { accountId, first = 10, after, last, before } = args;
+      const account = db.accounts.find(acc => acc.id === accountId);
+      if (!account) return null;
+
+      let transactions = [...account.withdrawalHistory];
+      
+      let hasNextPage = false;
+      let hasPreviousPage = false;
+      
+      if (after) {
+        const index = transactions.findIndex(tx => Buffer.from(tx.id).toString('base64') === after);
+        transactions = transactions.slice(index + 1);
+        hasPreviousPage = true;
+      }
+      
+      if (before) {
+        const index = transactions.findIndex(tx => Buffer.from(tx.id).toString('base64') === before);
+        transactions = transactions.slice(0, index);
+      }
+      
+      if (first) {
+        hasNextPage = transactions.length > first;
+        transactions = transactions.slice(0, first);
+      }
+      
+      if (last) {
+        hasPreviousPage = true;
+        transactions = transactions.slice(-last);
+      }
+
+      const edges = transactions.map(tx => ({
+        cursor: Buffer.from(tx.id).toString('base64'),
+        node: tx
+      }));
+
+      return {
+        edges,
+        pageInfo: {
+          hasNextPage,
+          hasPreviousPage,
+          startCursor: edges[0]?.cursor,
+          endCursor: edges[edges.length - 1]?.cursor
+        },
+        totalCount: account.withdrawalHistory.length
+      };
+    }) as Resolver<any, {}, { accountId: string; first?: number; after?: string; last?: number; before?: string }>
   },
 
   Mutation: {
@@ -254,7 +465,41 @@ const resolvers = {
 
       account.status = status;
       return account;
-    }) as Resolver<PensionAccount, {}, { accountId: string; status: PensionAccount['status'] }>
+    }) as Resolver<PensionAccount, {}, { accountId: string; status: PensionAccount['status'] }>,
+
+    addBeneficiary: ((_parent, { accountId, name, relationship, percentage, contactNumber }) => {
+      const account = db.accounts.find(acc => acc.id === accountId);
+      if (!account) {
+        throw new Error('账户未找到');
+      }
+
+      // 检查受益人分配比例总和是否超过100%
+      const currentTotal = account.beneficiaries.reduce((sum, ben) => sum + ben.percentage, 0);
+      if (currentTotal + percentage > 100) {
+        throw new Error('受益人分配比例总和不能超过100%');
+      }
+
+      const beneficiary: BeneficiaryInfo = {
+        id: `BEN${Math.random().toString(36).substr(2, 6)}`,
+        name,
+        relationship,
+        percentage,
+        contactNumber
+      };
+
+      account.beneficiaries.push(beneficiary);
+      return beneficiary;
+    }) as Resolver<
+      BeneficiaryInfo,
+      {},
+      {
+        accountId: string;
+        name: string;
+        relationship: string;
+        percentage: number;
+        contactNumber: string;
+      }
+    >
   },
 
   Subscription: {
@@ -275,6 +520,16 @@ const resolvers = {
         return payload.accountBalanceChanged;
       }) as Resolver<PensionAccount, { accountBalanceChanged: PensionAccount }>
     }
+  },
+
+  PensionAccount: {
+    beneficiaries: (async (parent, _args, { loaders }) => {
+      return await loaders.beneficiaryLoader.load(parent.id);
+    }) as Resolver<BeneficiaryInfo[]>,
+    
+    withdrawalHistory: (async (parent, _args, { loaders }) => {
+      return await loaders.transactionLoader.load(parent.id);
+    }) as Resolver<Transaction[]>
   }
 };
 
